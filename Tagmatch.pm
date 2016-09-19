@@ -78,7 +78,7 @@ sub check_tagmatch {
   my $tag = $pms->get_tag($target);
 
   my $match = 0;
-  dbg("Rule $rulename. Checking TAG $target against $regex");
+  dbg("Rule $rulename. Checking tag $target against $regex");
   $match = 1  if $tag =~ $regex;
 
   if ($match) {

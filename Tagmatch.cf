@@ -7,6 +7,6 @@
 
 ifplugin Mail::SpamAssassin::Plugin::Tagmatch
 
-  tagmatch  DKIM_EBAY  _RELAYSEXTERNAL_ /ebay/
+  tagmatch  DKIM_EBAY  _DKIMDOMAIN_ /^ebay\.[a-z]+/
 
 endif
