@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.11;
+my $VERSION = 0.12;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -45,7 +45,7 @@ sub set_config {
 
         my $result = $2 ne '' ? qr{(?$2)$1} : qr{$1};
 
-        $target =~ /_([A-Z][A-Z0-9_]*)_/;
+        $target =~ /^_([A-Z][A-Z0-9_]*)_$/;
 
         $conf->{parser}->{conf}->{tagmatch_rules}->{$rulename} = { target => $1, re => $result };
         $conf->{parser}->add_test($rulename, undef, $Mail::SpamAssassin::Conf::TYPE_EMPTY_TESTS);
