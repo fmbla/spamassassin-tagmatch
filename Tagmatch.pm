@@ -66,6 +66,8 @@ sub extract_metadata {
       sub { my($pms,@args) = @_;
         $self->check_tagmatch($pms,$rulename) }
     );
+
+    dbg("Callback for $conf->{tagmatch_rules}->{$rulename}->{target} added.");
   }
 
 }
@@ -78,7 +80,7 @@ sub check_tagmatch {
   my $tag = $pms->get_tag($target);
 
   my $match = 0;
-  dbg("Rule $rulename. Checking tag $target against $regex");
+  dbg("Rule $rulename. Checking tag $target ($tag) against $regex");
   $match = 1  if $tag =~ $regex;
 
   if ($match) {
