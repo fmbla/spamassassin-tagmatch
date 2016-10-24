@@ -5,8 +5,8 @@
 
 ifplugin Mail::SpamAssassin::Plugin::Tagmatch
 
-  tagmatch __TAGMATCH_DKIMDOMAIN_EBAY  _DKIMDOMAIN_ =~ /^ebay\.[a-z]+$/
-  tagmatch __TAGMATCH_TXREP_IP_UNKNOWN _TXREP_IP_UNKNOWN_ /^1$/
-  tagmatch __TAGMATCH_TXREP_GT_10      _TXREP_IP_MEAN >= 10
+  tagmatch __TAGMATCH_DKIMDOMAIN_EBAY  _DKIMDOMAIN_       =~ /^ebay\.[a-z]+$/
+  tagmatch __TAGMATCH_TXREP_IP_UNKNOWN _TXREP_IP_UNKNOWN_ =~ /^1$/
+  tagmatch __TAGMATCH_TXREP_GT_10      _TXREP_IP_MEAN     >= 10
 
 endif
