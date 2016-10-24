@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.12;
+my $VERSION = 0.13;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -36,19 +36,28 @@ sub set_config {
       my @values = split(/\s+/, $value);
       if (!defined $value || $value =~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
-      } elsif (@values != 3) {
+      } elsif (@values != 4) {
         return $Mail::SpamAssassin::Conf::INVALID_VALUE;
       } else {
-        my ($rulename, $target, $regex) = @values;
-        return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $conf->{parser}->is_delimited_regexp_valid($rulename, $regex);
-        return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $regex =~ m{^/(.+)/([a-z]*)\z}xs;
+        my ($rulename, $target, $equality, $compare) = @values;
 
-        my $result = $2 ne '' ? qr{(?$2)$1} : qr{$1};
+        if ($equality eq '=~') {
+          return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $conf->{parser}->is_delimited_regexp_valid($rulename, $compare);
+          return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $compare =~ m{^/(.+)/([a-z]*)\z}xs;
+
+          $compare = $2 ne '' ? qr{(?$2)$1} : qr{$1};
+
+        } elsif ($equality =~ /^[\<=\>!]+$/) {
+          $compare = $compare || 1;
+        } else {
+          return $Mail::SpamAssassin::Conf::INVALID_VALUE;
+        }
 
         $target =~ /^_([A-Z][A-Z0-9_]*)_$/;
 
-        $conf->{parser}->{conf}->{tagmatch_rules}->{$rulename} = { target => $1, re => $result };
+        $conf->{parser}->{conf}->{tagmatch_rules}->{$rulename} = { target => $1, equal => $equality, compare => $compare };
         $conf->{parser}->add_test($rulename, undef, $Mail::SpamAssassin::Conf::TYPE_EMPTY_TESTS);
+
       }
 
    }});
@@ -75,13 +84,31 @@ sub extract_metadata {
 sub check_tagmatch {
   my ($self, $pms, $rulename) = @_;
 
-  my $regex = $pms->{conf}->{tagmatch_rules}->{$rulename}->{re};
+  my $compare = $pms->{conf}->{tagmatch_rules}->{$rulename}->{compare};
+  my $equal = $pms->{conf}->{tagmatch_rules}->{$rulename}->{equal};
   my $target = $pms->{conf}->{tagmatch_rules}->{$rulename}->{target};
   my $tag = $pms->get_tag($target);
 
   my $match = 0;
-  dbg("Rule $rulename. Checking tag $target ($tag) against $regex");
-  $match = 1  if $tag =~ $regex;
+  dbg("Rule $rulename. Checking tag $target $tag $equality $compare");
+
+  if ($equality eq '=~') {
+    $match = 1 if $tag =~ $compare;
+  } elsif ($equality =~ /^[\<=\>!]+$/) {
+    if ($equality eq '<') {
+      $match = 1 if $tag < $compare;
+    } elsif ($equality eq '>') {
+      $match = 1 if $tag > $compare;
+    } elsif ($equality eq '<=') {
+      $match = 1 if $tag <= $compare;
+    } elsif ($equality eq '>=') {
+      $match = 1 if $tag >= $compare;
+    } elsif ($equality eq '==') {
+      $match = 1 if $tag == $compare;
+    } else {
+      $match = 1 if $tag != $compare;
+    }
+  }
 
   if ($match) {
     dbg("Rulename $rulename matched");
