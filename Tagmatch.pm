@@ -48,7 +48,7 @@ sub set_config {
           $compare = $2 ne '' ? qr{(?$2)$1} : qr{$1};
 
         } elsif ($equality =~ /^[\<=\>!]+$/) {
-          $compare = $compare || 1;
+          $compare = sprintf("%d", $compare);
         } else {
           return $Mail::SpamAssassin::Conf::INVALID_VALUE;
         }
