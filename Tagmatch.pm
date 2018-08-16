@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.14;
+my $VERSION = 0.15;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -87,7 +87,9 @@ sub check_tagmatch {
   my $compare = $pms->{conf}->{tagmatch_rules}->{$rulename}->{compare};
   my $equal = $pms->{conf}->{tagmatch_rules}->{$rulename}->{equal};
   my $target = $pms->{conf}->{tagmatch_rules}->{$rulename}->{target};
-  my $tag = $pms->get_tag($target) || '';
+  my $tag = $pms->get_tag($target);
+
+  return unless ($tag);
 
   my $match = 0;
   dbg("Rule $rulename. Checking tag $target $tag $equality $compare");
