@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.15;
+my $VERSION = 0.16;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -9,6 +9,16 @@ use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
 sub dbg { Mail::SpamAssassin::Plugin::dbg ("Tagmatch: @_"); }
+
+sub uri_to_domain {
+  my ($self, $domain) = @_;
+
+  if ($Mail::SpamAssassin::VERSION <= 3.004000) {
+    Mail::SpamAssassin::Util::uri_to_domain($domain);
+  } else {
+    $self->{main}->{registryboundaries}->uri_to_domain($domain);
+  }
+}
 
 # constructor: register the eval rule
 sub new
@@ -20,6 +30,9 @@ sub new
   $class = ref($class) || $class;
   my $self = $class->SUPER::new($mailsaobject);
   bless ($self, $class);
+
+  $self->register_eval_rule("check_tag_in_urilist");
+  $self->register_eval_rule("check_tag_in_addrlist");
 
   $self->set_config($mailsaobject->{conf});
 
@@ -48,7 +61,7 @@ sub set_config {
           $compare = $2 ne '' ? qr{(?$2)$1} : qr{$1};
 
         } elsif ($equality =~ /^[\<=\>!]+$/) {
-          $compare = sprintf("%d", $compare);
+          $compare = $compare || 1;
         } else {
           return $Mail::SpamAssassin::Conf::INVALID_VALUE;
         }
@@ -70,7 +83,7 @@ sub extract_metadata {
   my $pms = $opts->{permsgstatus};
   my $conf = $pms->{conf};
 
-  foreach my $rulename (sort(keys $conf->{tagmatch_rules})) {
+  foreach my $rulename (sort(keys %{$conf->{tagmatch_rules}})) {
     $pms->action_depends_on_tags($conf->{tagmatch_rules}->{$rulename}->{target},
       sub { my($pms,@args) = @_;
         $self->check_tagmatch($pms,$rulename) }
@@ -85,7 +98,7 @@ sub check_tagmatch {
   my ($self, $pms, $rulename) = @_;
 
   my $compare = $pms->{conf}->{tagmatch_rules}->{$rulename}->{compare};
-  my $equal = $pms->{conf}->{tagmatch_rules}->{$rulename}->{equal};
+  my $equality = $pms->{conf}->{tagmatch_rules}->{$rulename}->{equal};
   my $target = $pms->{conf}->{tagmatch_rules}->{$rulename}->{target};
   my $tag = $pms->get_tag($target);
 
@@ -117,6 +130,134 @@ sub check_tagmatch {
     $pms->got_hit($rulename, undef, ruletype => 'tagmatch');
   }
 
+}
+
+sub check_tag_in_urilist {
+
+  my ($self, $pms, $tag, $list) = @_;
+  my $rulename = $pms->get_current_eval_rule_name();
+
+  $pms->action_depends_on_tags($tag,
+      sub { my($pms,@args) = @_;
+        $self->_urilist_callback($pms, $list, $tag, $rulename);
+      }
+  );
+
+  return 0;
+
+}
+
+sub check_tag_in_addrlist {
+
+  my ($self, $pms, $tag, $list) = @_;
+  my $rulename = $pms->get_current_eval_rule_name();
+
+  $pms->action_depends_on_tags($tag,
+      sub { my($pms,@args) = @_;
+        $self->_urilist_callback($pms, $list, $tag, $rulename);
+      }
+  );
+
+  return 0;
+
+}
+
+sub _urilist_callback {
+  my ($self, $pms, $list, $tag, $rulename) = @_;
+
+  foreach my $addr (split / /, $pms->get_tag($tag) || '') {
+
+    if ($self->_check_urilist ($list, lc $addr)) {
+      $pms->got_hit($rulename, undef, ruletype => 'tagmatch');
+    }
+
+  }
+
+}
+
+sub _addrlist_callback {
+  my ($self, $pms, $list, $tag, $rulename) = @_;
+
+  foreach my $addr (split / /, $pms->get_tag($tag) || '') {
+
+    if ($self->_check_addrlist ($list, lc $addr)) {
+      $pms->got_hit($rulename, undef, ruletype => 'tagmatch');
+    }
+
+  }
+
+}
+
+sub _check_urilist {
+  my ($self, $list, $uri) = @_;
+
+  $uri = lc $uri;
+
+  my $list_ref = $self->{main}{conf}{uri_host_lists}{$list};
+  unless (defined $list_ref) {
+    warn "eval: could not find list $list";
+    return;
+  }
+
+  my %hosts;
+
+  my($domain,$host) = $self->uri_to_domain($uri);
+
+  local($1,$2);
+  my @query_keys;
+  if ($host =~ /^\[(.*)\]\z/) {  # looks like an address literal
+    @query_keys = ( $1 );
+  } elsif ($host =~ /^\d+\.\d+\.\d+\.\d+\z/) {  # IPv4 address
+    @query_keys = ( $host );
+  } elsif ($host ne '') {
+    my($h) = $host;
+    for (;;) {
+      shift @query_keys  if @query_keys > 10;  # sanity limit, keep tail
+      push(@query_keys, $h);  # sub.example.com, example.com, com
+      last if $h !~ s{^([^.]*)\.(.*)\z}{$2}s;
+    }
+  }
+  my $verdict;
+  my $match;
+
+  foreach my $q (@query_keys) {
+    $verdict = $list_ref->{$q};
+    if (defined $verdict) {
+      $match = $q eq $host ? $host : "$host ($q)";
+      $match = '!'  if !$verdict;
+      last;
+    }
+  }
+
+  if (defined $verdict) {
+    dbg("rules: check_uri_host %s, (%s): %s, search: %s",
+        $uri, $list, $match, join(', ',@query_keys));
+  }
+
+  $verdict;
+
+}
+
+sub _check_addrlist {
+  my ($self, $list, $addr) = @_;
+
+  my $list_ref = $self->{main}{conf}{$list};
+  unless (defined $list_ref) {
+    warn "eval: could not find list $list";
+    return;
+  }
+
+  $addr = lc $addr;
+  if (defined ($list_ref->{$addr})) { return 1; }
+  study $addr;  # study is a no-op since perl 5.16.0, eliminating related bugs
+  foreach my $regexp (values %{$list_ref}) {
+    if ($addr =~ qr/$regexp/i) {
+      dbg("rules: address $addr matches whitelist or blacklist regexp: $regexp");
+      return 1;
+    }
+  }
+
+  return 0;
 }
 
 1;
