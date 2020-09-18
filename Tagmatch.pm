@@ -1,8 +1,9 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.16;
+my $VERSION = 0.17;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
+use Mail::SpamAssassin::Util qw(compile_regexp);
 use List::Util ();
 
 use vars qw(@ISA);
@@ -55,10 +56,12 @@ sub set_config {
         my ($rulename, $target, $equality, $compare) = @values;
 
         if ($equality eq '=~') {
-          return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $conf->{parser}->is_delimited_regexp_valid($rulename, $compare);
-          return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $compare =~ m{^/(.+)/([a-z]*)\z}xs;
-
-          $compare = $2 ne '' ? qr{(?$2)$1} : qr{$1};
+          my ($rec, $err) = compile_regexp($value, 0);
+          if (!$rec) {
+           dbg("config: invalid compare value '$value': $err");
+           return $Mail::SpamAssassin::Conf::INVALID_VALUE;
+          }
+          $compare = $rec;
 
         } elsif ($equality =~ /^[\<=\>!]+$/) {
           $compare = $compare || 1;
