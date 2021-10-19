@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.17;
+my $VERSION = 0.20;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -56,7 +56,7 @@ sub set_config {
         my ($rulename, $target, $equality, $compare) = @values;
 
         if ($equality eq '=~') {
-          my ($rec, $err) = compile_regexp($value, 0);
+          my ($rec, $err) = compile_regexp($compare, 1);
           if (!$rec) {
            dbg("config: invalid compare value '$value': $err");
            return $Mail::SpamAssassin::Conf::INVALID_VALUE;
