@@ -1,5 +1,5 @@
 package Mail::SpamAssassin::Plugin::Tagmatch;
-my $VERSION = 0.20;
+my $VERSION = 0.30;
 
 use strict;
 use Mail::SpamAssassin::Plugin;
@@ -54,6 +54,7 @@ sub set_config {
         return $Mail::SpamAssassin::Conf::INVALID_VALUE;
       } else {
         my ($rulename, $target, $equality, $compare) = @values;
+        my $compare_tag;
 
         if ($equality eq '=~') {
           my ($rec, $err) = compile_regexp($compare, 1);
@@ -65,13 +66,17 @@ sub set_config {
 
         } elsif ($equality =~ /^[\<=\>!]+$/) {
           $compare = $compare || 1;
+        } elsif ($equality =~ /^(eq|ne)$/) {
+          if ($compare =~ /^_([A-Z][A-Z0-9_]*)_$/) {
+            $compare_tag = $1;
+          }
         } else {
           return $Mail::SpamAssassin::Conf::INVALID_VALUE;
         }
 
         $target =~ /^_([A-Z][A-Z0-9_]*)_$/;
 
-        $conf->{parser}->{conf}->{tagmatch_rules}->{$rulename} = { target => $1, equal => $equality, compare => $compare };
+        $conf->{parser}->{conf}->{tagmatch_rules}->{$rulename} = { target => $1, equal => $equality, compare => $compare, compare_tag => $compare_tag };
         $conf->{parser}->add_test($rulename, undef, $Mail::SpamAssassin::Conf::TYPE_EMPTY_TESTS);
 
       }
@@ -87,7 +92,10 @@ sub extract_metadata {
   my $conf = $pms->{conf};
 
   foreach my $rulename (sort(keys %{$conf->{tagmatch_rules}})) {
-    $pms->action_depends_on_tags($conf->{tagmatch_rules}->{$rulename}->{target},
+    my @tag_dep = ($conf->{tagmatch_rules}->{$rulename}->{target});
+    push @tag_dep, $conf->{tagmatch_rules}->{$rulename}->{compare_tag} if $conf->{tagmatch_rules}->{$rulename}->{compare_tag};
+
+    $pms->action_depends_on_tags(\@tag_dep,
       sub { my($pms,@args) = @_;
         $self->check_tagmatch($pms,$rulename) }
     );
@@ -104,6 +112,10 @@ sub check_tagmatch {
   my $equality = $pms->{conf}->{tagmatch_rules}->{$rulename}->{equal};
   my $target = $pms->{conf}->{tagmatch_rules}->{$rulename}->{target};
   my $tag = $pms->get_tag($target);
+
+  if ($pms->{conf}->{tagmatch_rules}->{$rulename}->{compare_tag}) {
+    $compare = $pms->get_tag($pms->{conf}->{tagmatch_rules}->{$rulename}->{compare_tag});
+  }
 
   return unless ($tag);
 
@@ -125,6 +137,12 @@ sub check_tagmatch {
       $match = 1 if $tag == $compare;
     } else {
       $match = 1 if $tag != $compare;
+    }
+  } elsif ($equality =~ /^(eq|ne)$/) {
+    if ($equality eq 'eq') {
+      $match = 1 if $tag eq $compare;
+    } else {
+      $match = 1 if $tag ne $compare;
     }
   }
 
