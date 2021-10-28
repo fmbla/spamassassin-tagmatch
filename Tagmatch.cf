@@ -5,8 +5,9 @@
 
 ifplugin Mail::SpamAssassin::Plugin::Tagmatch
 
-  tagmatch __TAGMATCH_DKIMDOMAIN_EBAY  _DKIMDOMAIN_       =~ /^ebay\.[a-z]+$/
-  tagmatch __TAGMATCH_TXREP_GT_10      _TXREP_IP_MEAN     >= 10
-  tagmatch __TAGMATCH_TXREP_IP_COUNT_0 _TXREP_IP_COUNT_   == 0
+  tagmatch __TAGMATCH_DKIMDOMAIN_EBAY         _DKIMDOMAIN_       =~ /^ebay\.[a-z]+$/
+  tagmatch __TAGMATCH_TXREP_GT_10             _TXREP_IP_MEAN     >= 10
+  tagmatch __TAGMATCH_TXREP_IP_COUNT_0        _TXREP_IP_COUNT_   == 0
+  tagmatch __TAGMATCH_DKIMDOM_MATCHES_FROMDOM _DKIMDOMAIN_       eq _SENDERDOMAIN_
 
 endif
